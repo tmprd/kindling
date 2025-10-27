@@ -161,13 +161,12 @@ public class FhirTurtleGenerator {
                 .restriction(fact.fhir_restriction(v, RDFS.Literal));
 
         // A resource can have an optional nodeRole
-        FHIRResource treeRoot = fact.fhir_class("treeRoot")
-                .addTitle("Class of FHIR base documents");
+        FHIRResource treeRoot = fact.fhir_individual("treeRoot")
+                .addTitle("Root resource of FHIR RDF document");
         FHIRResource nodeRole = fact.fhir_objectProperty("nodeRole")
                 .addTitle("Identifies role of subject in context of a given document")
                 .domain(Resource)
-                .range(treeRoot.resource);
-        Resource.restriction(fact.fhir_cardinality_restriction(nodeRole.resource, treeRoot.resource, 0, 1));
+                .rangeIndividual(treeRoot.resource);
 
 
         // Any element can have an index to assign order in a list
