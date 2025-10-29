@@ -517,6 +517,11 @@
             <version>5.8.2</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>de.atextor</groupId>
+            <artifactId>turtle-formatter</artifactId>
+            <version>1.2.16</version>
+        </dependency>
     </dependencies>
 
     <build>

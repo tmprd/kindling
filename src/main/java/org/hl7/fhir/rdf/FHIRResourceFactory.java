@@ -13,6 +13,9 @@ import org.apache.jena.riot.RDFFormat;
 import org.apache.jena.vocabulary.OWL2;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
+import de.atextor.turtle.formatter.FormattingStyle;
+import de.atextor.turtle.formatter.TurtleFormatter;
+
 
 
 public class FHIRResourceFactory {
@@ -31,7 +34,18 @@ public class FHIRResourceFactory {
     public void serialize(OutputStream writer) {
         RDFDataMgr.write(writer, model, RDFFormat.TURTLE_PRETTY);
     }
-
+    
+    /**
+     * Serialize the model in order with formatting style
+     */
+    public void serializeWithTurtleFormatter(OutputStream writer) {
+        // Build a model that already has our prefixes; let the formatter handle presentation.
+        Model copy = ModelFactory.createDefaultModel();
+        copy.setNsPrefixes(model.getNsPrefixMap());
+        copy.add(model);
+        TurtleFormatter formatter = new TurtleFormatter(FormattingStyle.DEFAULT);
+        formatter.accept(copy, writer);
+    }
 
     /**
      * Add a new datatype to the model

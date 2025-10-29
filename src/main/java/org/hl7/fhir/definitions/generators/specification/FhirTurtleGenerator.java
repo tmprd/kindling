@@ -483,7 +483,7 @@ public class FhirTurtleGenerator {
 
     public void commit(boolean header) throws Exception {
 
-        fact.serialize(destination);
+        fact.serializeWithTurtleFormatter(destination);
         destination.flush();
         destination.close();
    }
