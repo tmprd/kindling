@@ -100,12 +100,17 @@ public class FHIRResource {
     }
 
     public FHIRResource rangeIndividual(Resource r) {
+        Resource blankNode = oneOfIndividual(r);
+        resource.addProperty(RDFS.range, blankNode);
+        return this;
+    }
+
+    public Resource oneOfIndividual(Resource r) {
         Resource blankNode = resource.getModel().createResource();
         blankNode.addProperty(RDF.type, OWL2.Class);
         Resource individuals = resource.getModel().createList(new ArrayList<Resource>() {{ add(r); } }.iterator());
         blankNode.addProperty(OWL2.oneOf, individuals);
-        resource.addProperty(RDFS.range, blankNode);
-        return this;
+        return blankNode;
     }
 
     public FHIRResource restriction(Resource restriction) {
