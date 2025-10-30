@@ -168,7 +168,11 @@ public class FhirTurtleGenerator {
                 .domain(Resource)
                 .rangeIndividual(treeRoot.resource);
 
-
+        // Resource can have max 1 nodeRole
+        Resource.restriction(fact.create_empty_owl_restriction(nodeRole.resource).addDataProperty(OWL2.maxCardinality, "1", XSDDatatype.XSDinteger).resource);
+        // Resource nodeRole can only the individual treeRoot
+        Resource.restriction(fact.create_empty_owl_restriction(nodeRole.resource).addObjectProperty(OWL2.allValuesFrom, treeRoot.oneOfIndividual(treeRoot.resource)).resource);
+        
         // Any element can have an index to assign order in a list
 //        FHIRResource index = fact.fhir_dataProperty("index")
 //                .addTitle("Ordering value for list")
