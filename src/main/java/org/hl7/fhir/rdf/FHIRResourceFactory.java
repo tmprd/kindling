@@ -123,7 +123,7 @@ public class FHIRResourceFactory {
 
     
     public FHIRResource fhir_class_with_provenance(String name, String definitionCanonical) {
-        return fhir_resource(name, OWL2.Class, name)
+        return fhir_resource(getClassName(name), OWL2.Class, name)
                 .addProvenance(definitionCanonical);
     }
 

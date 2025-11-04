@@ -204,7 +204,7 @@ public class FhirTurtleGenerator {
         // XHTML is an XML Literal. Not available in Definitions.java, but see https://hl7.org/fhir/xhtml.profile.html
         String xhtmlCanonical = "http://hl7.org/fhir/StructureDefinition/xhtml";
         fact.fhir_class_with_provenance("xhtml", "Element", xhtmlCanonical)
-            .restriction(fact.fhir_cardinality_restriction(v, RDF.xmlLiteral, 1, 1));
+            .restriction(fact.fhir_class_cardinality_restriction(v, RDF.xmlLiteral, 1, 1));
 
         addProvenanceForTypeName(fact.fhir_class("PrimitiveType"), "PrimitiveType");
     }
@@ -482,7 +482,7 @@ public class FhirTurtleGenerator {
 
             // XHTML the exception, in that the html doesn't derive from Primitive
             if (targetName.equals("xhtml")) {
-                predicateResource = fact.fhir_dataProperty(shortenedPropertyName);
+                predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
             } else {
                 predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
                 genPropertyModifierExtensions(shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
