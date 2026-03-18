@@ -79,7 +79,7 @@ public class ResourceDefn  {
       case ANONYMOUS: return "Anonymous";
       case BUSINESS: return "Business";
       case INDIVIDUAL: return "Individual";
-      case NOT_CLASSIFIED: return "Not Classified";
+      case NOT_CLASSIFIED: return "No Dominant Category";
       case PATIENT: return "Patient";
       }
       return null;
