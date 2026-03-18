@@ -1373,7 +1373,7 @@ public class ProfileGenerator {
       sp.setWebPath(p.getName().toLowerCase()+"-search.html#"+sp.getId());        
       sp.setUrl("http://hl7.org/fhir/SearchParameter/"+sp.getId());
       sp.setVersion(version.toCode());
-      if (context.getSearchParameter(sp.getUrl()) != null)
+      if (context.fetchResource(SearchParameter.class, p.getUrl()) != null)
         throw new Exception("Duplicated Search Parameter "+sp.getUrl());
       context.cacheResource(sp);
       spd.setResource(sp);

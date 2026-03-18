@@ -1682,7 +1682,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       } //else 
 //        throw new Exception("unable to find base definition for "+name);
     }
-    StructureDefinition p = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, parts[0]);
+    StructureDefinition p = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, new UriType(parts[0]));
     if (p == null)
       throw new Exception("unable to find base definition for "+base);
     if (parts.length == 1) {
@@ -1712,7 +1712,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       // cause it probably doesn't, coming from the profile directly
       StructureDefinition base = getIgProfile(ae.getBaseDefinition());
       if (base == null)
-        base = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, ae.getBaseDefinition());
+        base = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, ae.getBaseDefinitionElement());
       new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).setNewSlicingProcessing(true).generateSnapshot(base, ae, ae.getBaseDefinition().split("#")[0], "http://hl7.org/fhir", ae.getName());
       page.getProfiles().see(ae, page.packageInfo());
     }

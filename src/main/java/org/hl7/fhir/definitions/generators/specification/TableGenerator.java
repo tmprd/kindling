@@ -204,7 +204,7 @@ public class TableGenerator extends BaseGenerator {
           if (ab.getValueSet() != null) {
             abr.seeAdditionalBinding(ab.getPurpose(), ab.getDoco(), ab.getValueSet());
           } else {
-            abr.seeAdditionalBinding(ab.getPurpose(), ab.getDoco(), ab.getRef());
+            abr.seeAdditionalBinding(ab.getPurpose(), ab.getDoco(), ab.getRef(), null);
           }
         }
         abr.render(gen, cc);

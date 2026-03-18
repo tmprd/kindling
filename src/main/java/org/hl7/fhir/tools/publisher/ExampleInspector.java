@@ -117,7 +117,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
     }
 
     @Override
-    public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Base refContext) {
+    public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Identifier identifier, Base refContext) {
       try {
         String[] s = url.split("/");
         if (s.length != 2 || !definitions.getResources().containsKey(s[0]))
@@ -558,7 +558,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
 
  
   @Override
-  public boolean resolveURL(IResourceValidator validator,Object appContext, String path, String url, String type, boolean canonical, List<CanonicalType> targets) throws IOException, FHIRException {
+  public boolean resolveURL(IResourceValidator validator,Object appContext, String path, String url, IWorkerContext.VersionResolutionRules rules, String type, boolean canonical, List<CanonicalType> targets) throws IOException, FHIRException {
     if (path.endsWith(".fullUrl"))
       return true;
     if (context.hasResource(org.hl7.fhir.r5.model.Resource.class, url)) {
@@ -788,7 +788,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
   }
 
   @Override
-  public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Base refContext) throws FHIRException {
+  public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Identifier identifier, Base refContext) throws FHIRException {
     if (Utilities.charCount(url, '/') == 1) {
      String type = url.substring(0, url.indexOf("/"));
      String id = url.substring(url.indexOf("/")+1);

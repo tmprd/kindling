@@ -338,7 +338,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     }
 
     @Override
-    public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Base refContext) {
+    public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Identifier identifier, Base refContext) {
       throw new Error("Not done yet");
     }
 
@@ -2000,7 +2000,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     case 1: return "Business";
     case 2: return "Individual";
     case 3: return "Patient";
-    case 4: return "Not Classified";
+    case 4: return "No Dominant Category";
     case 5: return "Not Applicable";
     default: return "??";
     }
@@ -10268,7 +10268,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
       }
     } else {
       String[] parts = structure.getBaseDefinition().split("#");
-      StructureDefinition profile = new ProfileUtilities(workerContext, null, null).getProfile(structure, parts[0]);
+      StructureDefinition profile = new ProfileUtilities(workerContext, null, null).getProfile(structure, new UriType(parts[0]));
       if (profile != null) {
         if (parts.length == 2) {
           return "<a href=\""+prefix+profile.getUserData("filename")+"."+parts[1]+".html\">the structure "+parts[1]+"</a> in <a href=\""+profile.getUserData("filename")+".html\">the "+profile.getName()+" profile</a>";
@@ -10672,7 +10672,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     }
   }
 
-  public BindingResolution resolveBinding(StructureDefinition profile, String ref, String path) throws FHIRException {
+  public BindingResolution resolveBinding(StructureDefinition profile, String ref, String path, org.hl7.fhir.r5.model.Element context) throws FHIRException {
     return resolveBinding(profile, ref, null, path);
   }
 
@@ -10786,7 +10786,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
 
     if (!url.startsWith("#")) {
       String[] path = url.split("#");
-      profile = new ProfileUtilities(workerContext, null, null).getProfile(null, path[0]);
+      profile = new ProfileUtilities(workerContext, null, null).getProfile(null, new UriType(path[0]));
       //      if (profile == null && url.startsWith("StructureDefinition/"))
       //        return "hspc-"+url.substring(8)+".html|"+url.substring(8);
     }

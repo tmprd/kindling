@@ -363,7 +363,7 @@ public class TerminologyNotesGenerator extends OutputStreamWriter {
         if (ab.getValueSet() != null) {
           abr.seeAdditionalBinding(ab.getPurpose(), ab.getDoco(), ab.getValueSet());
         } else {
-          abr.seeAdditionalBinding(ab.getPurpose(), ab.getDoco(), ab.getRef());
+          abr.seeAdditionalBinding(ab.getPurpose(), ab.getDoco(), ab.getRef(), null);
         }
       }
       mx = abr.render();

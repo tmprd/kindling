@@ -932,7 +932,7 @@ public class OldSpreadsheetParser {
         sp.setUrl("http://hl7.org/fhir/SearchParameter/"+sp.getId());
         if (definitions != null)
           definitions.addNs(sp.getUrl(), "Search Parameter " +sp.getName(), pack.getId()+".html#search");
-        if (context.getSearchParameter(sp.getUrl()) != null)
+        if (context.fetchResource(SearchParameter.class, sp.getUrl()) != null)
           throw new Exception("Duplicated Search Parameter "+sp.getUrl());
         context.cacheResource(sp);
         pack.getSearchParameters().add(sp);
