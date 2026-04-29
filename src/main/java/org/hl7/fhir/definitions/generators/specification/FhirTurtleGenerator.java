@@ -225,21 +225,26 @@ public class FhirTurtleGenerator {
 
             FHIRResource originalResource = fact.fhir_class(className);
 
-            FHIRResource modResource = fact.fhir_class_with_provenance("_"+className, definitionCanonical);
+            FHIRResource modResource = getModifierExtensionClass(className, originalResource, definitionCanonical);
 
             if(baseDefinitionUrl != null) {
                 String baseName = getResourceNameFromCanonical(baseDefinitionUrl);
                 Resource baseRes = RDFNamespace.FHIR.resourceRef(baseName);
                 modResource.addObjectProperty(RDFS.subClassOf, baseRes);
             }
+            
+            // TODO move and combine this logic to where axioms are generated from ElementDefinitions
+            // This would only happen when "modifierExtension" is explicitly listed in the differential (like for the classes this code is intended for)
 
             FHIRResource extensionResource = fact.fhir_class("Extension");
 
             Resource modifierExtensionProperty = RDFNamespace.FHIR.resourceRef("modifierExtension");
 
-            FHIRResource cardRestriction = fact.fhir_bnode().addType(OWL2.Restriction).addDataProperty(OWL2.minCardinality, "1", XSDDatatype.XSDinteger)
-                    .addObjectProperty(OWL2.onProperty, modifierExtensionProperty);
+            FHIRResource cardRestriction = fact.fhir_bnode().addType(OWL2.Restriction)
+                                                .addDataProperty(OWL2.minCardinality, "1", XSDDatatype.XSDinteger)
+                                                .addObjectProperty(OWL2.onProperty, modifierExtensionProperty);
             modResource.restriction(cardRestriction.resource);
+
             FHIRResource extRestriction = fact.fhir_bnode().addType(OWL2.Restriction)
                     .addObjectProperty(OWL2.onProperty, modifierExtensionProperty)
                     .addObjectProperty(OWL2.allValuesFrom, extensionResource);
@@ -325,7 +330,8 @@ public class FhirTurtleGenerator {
         String definitionCanonical = typeSd != null ? typeSd.getUrl() : null;
         processTypes(typeName, typeRes, td, typeName, false, definitionCanonical);
         if(classHasModifierExtensions.contains(parentName)) {
-            genModifierExtensions(typeName, typeRes, parentName, definitionCanonical);
+            var modRes = getModifierExtensionClass(typeName, typeRes, definitionCanonical);
+            modRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_" + parentName)); // should be done separately...
         }
     }
 
@@ -370,33 +376,68 @@ public class FhirTurtleGenerator {
 
         if(!Utilities.noString(resourceType.getW5()))
             rdRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.W5.resourceRef(resourceType.getW5()));
-        if(definitions.getResources().containsKey(resourceName)  && classHasModifierExtensions.contains(superClass.getLocalName())) { 
-            //Bundle, Binary, Parameters, DomainResource should be excluded from this clause and not get modifier extensions here 
+
+        if(resourceType.enablesModifierExtensions() || ancestorHasModifierExtensions(resourceName, superClass.getLocalName())) { 
+            // Example: Bundle, Binary, Parameters should be excluded from this clause and not get modifier extensions here 
             // since they are under fhir:Resource instead of fhir:DomainResource
-            genModifierExtensions(resourceName, rdRes, superClass.getLocalName(), definitionCanonical);
+            var modRes = getModifierExtensionClass(resourceName, rdRes, definitionCanonical);
+            modRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_" + superClass.getLocalName()));
         }
+    }
+
+    // Ancestor definition must be able to have modiferExtensions
+    private boolean ancestorHasModifierExtensions(String className, String superClassName) throws Exception {
+        if (Utilities.noString(className)) {
+            return false;
+        }
+        if (classHasModifierExtensions.contains(className)) {
+            return true;
+        }
+        return ancestorHasModifierExtensions(superClassName, getSuperClassName(superClassName));
+    }
+
+    private String getSuperClassName(String className) throws Exception {
+        ResourceDefn resource = definitions.getResourceByNameOrNull(className);
+        if (resource != null) {
+            String typeCode = resource.getRoot().typeCode();
+            return Utilities.noString(typeCode) ? null : typeCode;
+        }
+
+        if (definitions.hasElementDefn(className)) {
+            String typeCode = definitions.getElementDefn(className).typeCode();
+            return Utilities.noString(typeCode) ? null : typeCode;
+        }
+        return null;
     }
 
     /**
      * Generates corresponding ontology for Modifier Extensions of fhir:OriginalClass as fhir:_OriginalClass
+     * * This is RDF-only syntax to help preserve monotonocity
      */
-    private void genModifierExtensions(String baseName, FHIRResource baseFR, String parentName, String definitionCanonical) throws Exception {
+    private FHIRResource getModifierExtensionClass(String baseName, FHIRResource baseFR, String definitionCanonical) throws Exception {
+            FHIRResource modRes = fact.fhir_class_with_provenance("_" + baseName, definitionCanonical);
+            modRes.addDataProperty(RDFS.comment, "(Modified) " + baseName);
 
             // could change to instantiate only once
-            FHIRResource modifierExtensionClass = fact.fhir_resource("modifierExtensionClass", OWL2.AnnotationProperty, "modifierExtensionClass").addDataProperty(RDFS.comment, "has modifier extension class");
-            Property modifierExtensionClassProperty = ResourceFactory.createProperty(modifierExtensionClass.resource.toString());
+            FHIRResource modifierExtensionAnnotation = fact.fhir_resource("modifierExtensionClass", OWL2.AnnotationProperty, "modifierExtensionClass")
+                                                        .addDataProperty(RDFS.comment, "has modifier extension class");
+            Property modifierExtensionClassProperty = ResourceFactory.createProperty(modifierExtensionAnnotation.resource.toString());
 
-            FHIRResource modRes = fact.fhir_class_with_provenance("_" + baseName, definitionCanonical)
-                    .addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_" + parentName));
-            modRes.addDataProperty(RDFS.comment, "(Modified) " + baseName);
-            baseFR.addObjectProperty(modifierExtensionClassProperty, modRes);
 
+            var modifierClassName = RDFNamespace.FHIR.getURI() + "_" + baseName;
+            // var modifierExtensionClass = fact.fhir_resource(modifierClassName, null, null);
+            baseFR.resource.addProperty(modifierExtensionClassProperty, modifierClassName);
+            return modRes;
     }
 
     /**
      * Generates corresponding ontology for Modifier Extensions of fhir:OriginalProperty as fhir:_OriginalProperty
+     * This is RDF-only syntax to help preserve monotonocity
      */
-    private void genPropertyModifierExtensions(String baseName, FHIRResource baseFR, String label, String definitionCanonical) throws Exception {
+    private void genPropertyModifierExtensions(ElementDefn ed, String baseName, FHIRResource baseFR, String label, String definitionCanonical) throws Exception {
+        // Generate _ property only if ElementDefinition.isModifier = true
+        if ( !ed.isModifier() ) return;
+
         if(baseName.equals("modifierExtension")) return; //skip the special case of fhir:modifierExtension
 
         // could change to instantiate only once
@@ -439,7 +480,7 @@ public class FhirTurtleGenerator {
 
         FHIRResource predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
 
-        genPropertyModifierExtensions(shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
+        genPropertyModifierExtensions(ed, shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
         
         // Polymorphic / Choice types
         if (ed.getName().endsWith("[x]")) {
@@ -454,6 +495,12 @@ public class FhirTurtleGenerator {
         if (ed.getTypes().isEmpty()) {  //subnodes
             // Monomorphic complex type (no type specified, but has sub-elements)
             targetElementClass = fact.fhir_class(targetClassName, innerIsBackbone ? "BackboneElement" : "Element");
+
+            if (innerIsBackbone) {
+                // this is a subclass of BackboneElement, therefore generate modifier extension classes
+                var modRes = getModifierExtensionClass(targetClassName, targetElementClass, definitionCanonical);
+                modRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_BackboneElement"));
+            }
 
             // Recursively process sub-elements
             processTypes(targetClassName, targetElementClass, ed, targetClassName, innerIsBackbone, definitionCanonical);
@@ -488,7 +535,7 @@ public class FhirTurtleGenerator {
                 predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
             } else {
                 predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
-                genPropertyModifierExtensions(shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
+                genPropertyModifierExtensions(ed, shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
             }
         }
 
@@ -502,18 +549,13 @@ public class FhirTurtleGenerator {
         predicateResource.addTitle(targetClassName + ": " + ed.getShortDefn());
 
         // Add property restrictions
-        if(ed.getName().equals("modifierExtension") && ed.hasModifier()) {
-            // special case for modifierExtensions on original Resources having a cardinality of zero
-            baseResource.restriction(fact.fhir_class_cardinality_restriction(predicateResource.resource, targetElementClass.resource, 0, 0));
-        } else {
-            baseResource.restriction(
-                fact.fhir_class_cardinality_restriction(predicateResource.resource, 
-                    targetElementClass.resource, 
-                    ed.getMinCardinality(), 
-                    ed.getMaxCardinality()
-                )
-            );
-        }
+        baseResource.restriction(
+            fact.fhir_class_cardinality_restriction(predicateResource.resource, 
+                targetElementClass.resource, 
+                ed.getMinCardinality(), 
+                ed.getMaxCardinality()
+            )
+        );
         if(!Utilities.noString(ed.getW5()))
             predicateResource.addObjectProperty(RDFS.subPropertyOf, RDFNamespace.W5.resourceRef(ed.getW5()));
     }
