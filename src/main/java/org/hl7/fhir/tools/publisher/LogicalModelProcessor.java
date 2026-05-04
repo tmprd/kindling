@@ -15,6 +15,7 @@ import org.hl7.fhir.r5.conformance.profile.ProfileKnowledgeProvider;
 import org.hl7.fhir.r5.conformance.profile.ProfileUtilities;
 import org.hl7.fhir.r5.context.ContextUtilities;
 import org.hl7.fhir.r5.extensions.ExtensionUtilities;
+import org.hl7.fhir.r5.model.Element;
 import org.hl7.fhir.r5.model.ElementDefinition.ElementDefinitionBindingComponent;
 import org.hl7.fhir.r5.model.Enumerations.FHIRVersion;
 import org.hl7.fhir.r5.model.Resource;
@@ -205,8 +206,8 @@ public class LogicalModelProcessor extends BuildToolScriptedPageProcessor implem
     return page.resolveBinding(profile, binding, path);
   }
 
-  public BindingResolution resolveBinding(StructureDefinition profile, String ref, String path) throws FHIRException {
-    return page.resolveBinding(profile, ref, path);
+  public BindingResolution resolveBinding(StructureDefinition profile, String ref, String path, Element context) throws FHIRException {
+    return page.resolveBinding(profile, ref, path, context);
   }
 
   @Override

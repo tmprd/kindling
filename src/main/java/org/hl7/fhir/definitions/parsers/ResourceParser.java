@@ -89,10 +89,7 @@ import org.hl7.fhir.r5.utils.BuildExtensions;
 import org.hl7.fhir.r5.utils.CanonicalResourceUtilities;
 import org.hl7.fhir.r5.extensions.ExtensionDefinitions;
 import org.hl7.fhir.tools.publisher.BuildWorkerContext;
-import org.hl7.fhir.utilities.PathBuilder;
-import org.hl7.fhir.utilities.StandardsStatus;
-import org.hl7.fhir.utilities.FileUtilities;
-import org.hl7.fhir.utilities.Utilities;
+import org.hl7.fhir.utilities.*;
 import org.hl7.fhir.utilities.filesystem.CSFile;
 import org.hl7.fhir.utilities.filesystem.CSFileInputStream;
 
@@ -505,7 +502,6 @@ public class ResourceParser {
     
     ProfileUtilities pu = new ProfileUtilities(context, null, null);
     r.setRoot(parseTypeDefinition(pu, sd.getDifferential().getElementFirstRep(), sd));
-    r.getRoot().setFmmLevel(r.getFmmLevel());
     r.getRoot().setRequirements(r.getRequirements());
     if (r.isAbstract()) {
       r.getRoot().setAbstractType(true);
@@ -608,14 +604,6 @@ public class ResourceParser {
       ed.setTranslatable(ExtensionUtilities.readBoolExtension(focus, BuildExtensions.EXT_TRANSLATABLE));
     }
     ed.setOrderMeaning(focus.getOrderMeaning());
-    if (ExtensionUtilities.hasExtension(focus, BuildExtensions.EXT_STANDARDS_STATUS)) {
-      Extension sse = ExtensionUtilities.getExtension(focus, BuildExtensions.EXT_STANDARDS_STATUS);
-      ed.setStandardsStatus(StandardsStatus.fromCode(sse.getValue().primitiveValue()));
-      Extension ssr = sse.getValue().getExtensionByUrl(ExtensionDefinitions.EXT_STANDARDS_STATUS_REASON);
-      if (ssr != null) {
-        ed.setStandardsStatusReason(ssr.getValue().primitiveValue());
-      }
-    }
     if (ExtensionUtilities.hasExtension(focus, BuildExtensions.EXT_NORMATIVE_VERSION)) {
       ed.setNormativeVersion(ExtensionUtilities.readStringExtension(focus, BuildExtensions.EXT_NORMATIVE_VERSION));
     }
@@ -807,7 +795,10 @@ public class ResourceParser {
     }
 
     if (definitions.getValuesets().has(reference)) {
-      return definitions.getValuesets().get(reference);
+      ValueSet vs = definitions.getValuesets().get(reference);
+      if (vs.getSourcePackage() == null || !vs.getSourcePackage().isExtensionsPack()) {
+        return vs;
+      }
     }
     if (definitions.getExtraValuesets().containsKey(reference)) {
       return definitions.getExtraValuesets().get(reference);
@@ -830,7 +821,7 @@ public class ResourceParser {
       if (!id.equals(cs.getId())) {
         throw new FHIRException("Error loading "+csfn+": id mismatch. Expected "+id+" but found "+cs.getId());        
       }
-      boolean save = CodeSystemUtilities.checkMakeShareable(cs);
+      boolean save = false; // CodeSystemUtilities.checkMakeShareable(cs);
       if (!cs.hasUrl()) {
         cs.setUrl("http://hl7.org/fhir/"+cs.getId());
         save = true;
@@ -867,7 +858,7 @@ public class ResourceParser {
         save = true;
       }
       if (!cs.hasStatus()) {
-        cs.setStatus(PublicationStatus.DRAFT);
+        cs.setStatus(PublicationStatus.ACTIVE);
       }
       if (!CodeSystemUtilities.hasOID(cs)) {
         String oid = registry.getOID(cs.getUrl());
@@ -876,7 +867,7 @@ public class ResourceParser {
           CodeSystemUtilities.setOID(cs, "urn:oid:"+oid);
         }
       }
-      CodeSystemUtilities.makeShareable(cs);
+      CodeSystemUtilities.makeShareable(cs, false);
       if (save) {
         saveXml(cs, "codesystem-"+id+".xml");
       }
@@ -908,7 +899,7 @@ public class ResourceParser {
         cm.setUserData("filename", cmid);
         cm.setWebPath(cmid+".html");
         cm.setUserData("generate", "true");
-        ConceptMapUtilities.makeShareable(cm);
+        ConceptMapUtilities.makeShareable(cm, false);
         if (!ConceptMapUtilities.hasOID(cm)) {
           String oid = registry.getOID(cm.getUrl());
           if (oid != null) {
@@ -942,7 +933,7 @@ public class ResourceParser {
       if (!reference.equals(vs.getUrl())) {
         throw new FHIRException("Error loading "+vsfn+": URL mismatch. Expected "+reference+" but found "+vs.getUrl());
       }
-      boolean save = ValueSetUtilities.makeVSShareable(vs);
+      boolean save = false; // ValueSetUtilities.makeVSShareable(vs);
       vs.setUserData("filename", "valueset-"+vs.getId());
       vs.setWebPath("valueset-"+vs.getId()+".html");
       vs.setExperimental(false);
@@ -964,7 +955,7 @@ public class ResourceParser {
       if (!vs.hasPublisher()) {
         vs.setPublisher("HL7 International");
       }
-      ValueSetUtilities.makeShareable(vs);
+      ValueSetUtilities.makeShareable(vs, false);
 
       vs.setWebPath("valueset-"+vs.getId()+".html");
       if (!ValueSetUtilities.hasOID(vs)) {
@@ -982,6 +973,13 @@ public class ResourceParser {
       
       return vs;
     }
+
+
+    if (definitions.getValuesets().has(reference)) {
+      ValueSet vs = definitions.getValuesets().get(reference);
+      return vs;
+    }
+
     return null; /// try again later
   }
 

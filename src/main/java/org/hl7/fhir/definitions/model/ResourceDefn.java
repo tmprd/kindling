@@ -79,7 +79,7 @@ public class ResourceDefn  {
       case ANONYMOUS: return "Anonymous";
       case BUSINESS: return "Business";
       case INDIVIDUAL: return "Individual";
-      case NOT_CLASSIFIED: return "Not Classified";
+      case NOT_CLASSIFIED: return "No Dominant Category";
       case PATIENT: return "Patient";
       }
       return null;
@@ -234,7 +234,6 @@ public class ResourceDefn  {
 
 
   private String requirements;
-  private String normativePackage;
   private String normativeVersion;
 
   public List<Example> getExamples() {
@@ -384,14 +383,6 @@ public class ResourceDefn  {
     this.template = template;
   }
 
-  
-  public String getNormativePackage() {
-    return normativePackage;
-  }
-
-  public void setNormativePackage(String value) {
-     this.normativePackage = value; 
-  }
 
   public void addHints(List<String> hints) {
     this.hints.addAll(hints);

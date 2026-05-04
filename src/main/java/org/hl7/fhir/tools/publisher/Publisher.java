@@ -90,6 +90,7 @@ import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.transport.URIish;
 import org.hl7.fhir.convertors.factory.VersionConvertorFactory_40_50;
 import org.hl7.fhir.convertors.factory.VersionConvertorFactory_43_50;
+import org.hl7.fhir.convertors.SpecDifferenceEvaluator;
 import org.hl7.fhir.convertors.misc.LoincToDEConvertor;
 import org.hl7.fhir.definitions.Config;
 import org.hl7.fhir.definitions.generators.specification.DataTypeTableGenerator;
@@ -808,8 +809,9 @@ public class Publisher implements URIResolver, SectionNumberer {
 
       loadValueSets1();
       generateSCMaps();
+      validate1();
       processProfiles();
-      validate();
+      validate2();
       checkAllOk();
       startValidation();
 
@@ -1015,7 +1017,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       boolean sok = testSearchParameter(spd.getResource(), rd.getProfile());
       if (!sok) {
         ok = false;
-        ids.add(spd.getCode());
+        ids.add(spd.getResource()+"/"+spd.getCode());
       }
     }
     return ok;
@@ -1680,7 +1682,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       } //else 
 //        throw new Exception("unable to find base definition for "+name);
     }
-    StructureDefinition p = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, parts[0]);
+    StructureDefinition p = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, new UriType(parts[0]));
     if (p == null)
       throw new Exception("unable to find base definition for "+base);
     if (parts.length == 1) {
@@ -1710,7 +1712,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       // cause it probably doesn't, coming from the profile directly
       StructureDefinition base = getIgProfile(ae.getBaseDefinition());
       if (base == null)
-        base = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, ae.getBaseDefinition());
+        base = new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).getProfile(null, ae.getBaseDefinitionElement());
       new ProfileUtilities(page.getWorkerContext(), page.getValidationErrors(), page).setNewSlicingProcessing(true).generateSnapshot(base, ae, ae.getBaseDefinition().split("#")[0], "http://hl7.org/fhir", ae.getName());
       page.getProfiles().see(ae, page.packageInfo());
     }
@@ -2217,11 +2219,14 @@ public class Publisher implements URIResolver, SectionNumberer {
     cpd.setSearch(true);
     for (String rn : page.getDefinitions().sortedResourceNames()) {
       ResourceDefn rd = page.getDefinitions().getResourceByName(rn);
-      String rules = c.getResources().get(rd);
+      Compartment.StringTriple rules = c.getResources().get(rd);
       CompartmentDefinitionResourceComponent cc = cpd.addResource().setCode(rd.getName());
-      if (!Utilities.noString(rules)) {
-        for (String p : rules.split("\\|"))
+      if (rules != null) {
+        for (String p : rules.getParameter().split("\\|")) {
           cc.addParam(p.trim());
+        }
+        cc.setStartParam(rules.getStart());
+        cc.setEndParam(rules.getEnd());
       }
     }
     cpd.setWebPath("compartmentdefinition-"+c.getName()+".html");
@@ -2495,7 +2500,8 @@ public class Publisher implements URIResolver, SectionNumberer {
       prsr = new SourceParser(page, folder, page.getDefinitions(), web, page.getVersion(), page.getWorkerContext(), page.getGenDate(), page, fpUsages, isCIBuild);
       prsr.checkConditions(errors, dates);
       page.setRegistry(prsr.getRegistry());
-      page.getDiffEngine().loadFromIni(prsr.getIni());
+      page.getDiffEngine().loadFromIni(prsr.getIni(), "r4-r6-changes", "4", "6");
+      page.getDiffEngine().loadFromIni(prsr.getIni(), "r5-r6-changes", "5", "6");
 
 
 
@@ -2552,12 +2558,11 @@ public class Publisher implements URIResolver, SectionNumberer {
     return errors.size() == 0;
   }
 
-  private void validate() throws Exception {
-    page.log("Validating", LogMessageType.Process);
-    ResourceValidator val = new ResourceValidator(page.getDefinitions(), page.getTranslations(), page.getCodeSystems(), page.getFolders().srcDir, fpUsages, page.getSuppressedMessages(), page.getWorkerContext(), new ValidatorSettings());
+  private ResourceValidator val = null;
+  private void validate1() throws Exception {
+    page.log("Validating (1)", LogMessageType.Process);
+    val = new ResourceValidator(page.getDefinitions(), page.getTranslations(), page.getCodeSystems(), page.getFolders().srcDir, fpUsages, page.getSuppressedMessages(), page.getWorkerContext(), new ValidatorSettings());
     val.resolvePatterns();
-    ProfileValidator valp = new ProfileValidator(page.getWorkerContext(), new ValidatorSettings(), null, null);
-
     for (String n : page.getDefinitions().getTypes().keySet())
       page.getValidationErrors().addAll(val.checkStucture(n, page.getDefinitions().getTypes().get(n)));
     
@@ -2569,10 +2574,6 @@ public class Publisher implements URIResolver, SectionNumberer {
         page.getValidationErrors().addAll(val.check(n, page.getDefinitions().getResources().get(n)));
     page.getValidationErrors().addAll(val.check("Parameters", page.getDefinitions().getResourceByName("Parameters")));
 
-    for (String rname : page.getDefinitions().sortedResourceNames()) {
-      ResourceDefn r = page.getDefinitions().getResources().get(rname);
-      checkExampleLinks(page.getValidationErrors(), r);
-    }
     for (Compartment cmp : page.getDefinitions().getCompartments())
       page.getValidationErrors().addAll(val.check(cmp));
     
@@ -2586,7 +2587,17 @@ public class Publisher implements URIResolver, SectionNumberer {
         }
       }
     }
-//          E
+  }
+
+  private void validate2() throws Exception {
+    page.log("Validating (2)", LogMessageType.Process);
+    ProfileValidator valp = new ProfileValidator(page.getWorkerContext(), new ValidatorSettings(), null, null);
+
+    for (String rname : page.getDefinitions().sortedResourceNames()) {
+      ResourceDefn r = page.getDefinitions().getResources().get(rname);
+      checkExampleLinks(page.getValidationErrors(), r);
+    }
+
     page.setPatternFinder(val.getPatternFinder());
     val.report();
     val.summariseSearchTypes(page.getSearchTypeUsage());
@@ -2618,7 +2629,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       s.write("<wg code=\""+wg.getCode()+"\" name=\""+wg.getName()+"\" url=\""+wg.getUrl()+"\"/>\r\n");
     }
     for (PageInformation pn : page.getDefinitions().getPageInfo().values()) {
-      s.write("<page name=\""+pn.getName()+"\" wg=\""+pn.getWgCode()+"\" fmm=\""+pn.getFmm()+"\"/>\r\n");
+      s.write("<page name=\""+pn.getName()+"\" wg=\""+pn.getWgCode()+"\" status=\""+pn.getStatus().toCode()+"\"/>\r\n");
     }
     try {
       s.write(new String(XsltUtilities.saxonTransform(page.getFolders().dstDir + "profiles-resources.xml", xslt)));
@@ -2921,8 +2932,13 @@ public class Publisher implements URIResolver, SectionNumberer {
 
     List<StructureDefinition> list = new ArrayList<StructureDefinition>();
     for (StructureDefinition sd : new ContextUtilities(page.getWorkerContext()).allStructures()) {
-      if (sd.getDerivation() == TypeDerivationRule.SPECIALIZATION)
-        list.add(sd);
+        if (sd.getKind() == StructureDefinition.StructureDefinitionKind.LOGICAL)
+          // Skip logical models
+          continue;
+       // Include <Base> which has no derivation
+        if (sd.getDerivation() == null || sd.getDerivation() == TypeDerivationRule.SPECIALIZATION) {
+          list.add(sd);
+        }
     }
     ShExGenerator shgen = new ShExGenerator(page.getWorkerContext());
     shgen.completeModel = true;
@@ -2979,6 +2995,8 @@ public class Publisher implements URIResolver, SectionNumberer {
     loadR4Definitions();
     page.log("Load R4B Definitions", LogMessageType.Process);
     loadR4BDefinitions();
+    page.log("Load R5 Definitions", LogMessageType.Process);
+    loadR5Definitions();
     page.log("Produce Content", LogMessageType.Process);
     produceSpec();
 
@@ -3054,6 +3072,36 @@ public class Publisher implements URIResolver, SectionNumberer {
         org.hl7.fhir.r4b.model.ValueSet vs = (org.hl7.fhir.r4b.model.ValueSet) be.getResource();
         vs.setUserData("old", "r4");
         map.add((ValueSet) VersionConvertorFactory_43_50.convertResource(vs));
+      }
+    }    
+  }
+
+  private void loadR5Definitions() throws FileNotFoundException, FHIRException, IOException {
+    loadR5DefinitionBundle(page.getDiffEngine().getOriginalR5().getTypes(), Utilities.path(page.getFolders().rootDir, "tools", "history", "release5", "profiles-types.xml"));
+    loadR5DefinitionBundle(page.getDiffEngine().getOriginalR5().getResources(), Utilities.path(page.getFolders().rootDir, "tools", "history", "release5", "profiles-resources.xml"));
+//    loadR5DefinitionBundle(page.getDiffEngine().getOriginal().getExtensions(), Utilities.path(page.getFolders().rootDir, "tools", "history", "release5", "extension-definitions.xml"));
+    loadR5DefinitionBundle(page.getDiffEngine().getOriginalR5().getProfiles(), Utilities.path(page.getFolders().rootDir, "tools", "history", "release5", "profiles-others.xml"));
+    loadValueSetBundleR5(page.getDiffEngine().getOriginalR5().getExpansions(), Utilities.path(page.getFolders().rootDir, "tools", "history", "release5", "expansions.xml"));
+    loadValueSetBundleR5(page.getDiffEngine().getOriginalR5().getValuesets(), Utilities.path(page.getFolders().rootDir, "tools", "history", "release5", "valuesets.xml"));
+  }
+
+    private void loadR5DefinitionBundle(Map<String, StructureDefinition> map, String fn) throws FHIRException, FileNotFoundException, IOException {
+    org.hl7.fhir.r5.model.Bundle bundle = (org.hl7.fhir.r5.model.Bundle) new org.hl7.fhir.r5.formats.XmlParser().parse(new FileInputStream(fn));
+    for (org.hl7.fhir.r5.model.Bundle.BundleEntryComponent be : bundle.getEntry()) {
+      if (be.getResource() instanceof org.hl7.fhir.r5.model.StructureDefinition) {
+        org.hl7.fhir.r5.model.StructureDefinition sd = (org.hl7.fhir.r5.model.StructureDefinition) be.getResource();
+        map.put(sd.getName(), (StructureDefinition) sd);
+      }
+    }
+  }
+  
+  private static void loadValueSetBundleR5(List<ValueSet> map, String fn) throws FHIRException, FileNotFoundException, IOException {
+    org.hl7.fhir.r5.model.Bundle bundle = (org.hl7.fhir.r5.model.Bundle) new org.hl7.fhir.r5.formats.XmlParser().parse(new FileInputStream(fn));
+    for (org.hl7.fhir.r5.model.Bundle.BundleEntryComponent be : bundle.getEntry()) {
+      if (be.getResource() instanceof org.hl7.fhir.r5.model.ValueSet) {
+        org.hl7.fhir.r5.model.ValueSet vs = (org.hl7.fhir.r5.model.ValueSet) be.getResource();
+        vs.setUserData("old", "r5");
+        map.add((ValueSet) vs);
       }
     }    
   }
@@ -3311,25 +3359,32 @@ public class Publisher implements URIResolver, SectionNumberer {
       page.log(" ...collections ", LogMessageType.Process);
 
       com.google.gson.JsonObject diff = new com.google.gson.JsonObject();
-      page.getDiffEngine().getDiffAsJson(diff, true);
+      page.getDiffEngine().getDiffAsJson(diff, SpecDifferenceEvaluator.CompareFhirVersion.R4);
       Gson gson = new GsonBuilder().setPrettyPrinting().create();
       Gson gsonp = new GsonBuilder().create();
       String json = gson.toJson(diff);
       FileUtilities.stringToFile(json, Utilities.path(page.getFolders().dstDir, "fhir.r4.diff.json"));
 
       diff = new com.google.gson.JsonObject();
-      page.getDiffEngine().getDiffAsJson(diff, false);
+      page.getDiffEngine().getDiffAsJson(diff, SpecDifferenceEvaluator.CompareFhirVersion.R4B);
       gson = new GsonBuilder().setPrettyPrinting().create();
       gsonp = new GsonBuilder().create();
       json = gson.toJson(diff);
       FileUtilities.stringToFile(json, Utilities.path(page.getFolders().dstDir, "fhir.r4b.diff.json"));
+
+      diff = new com.google.gson.JsonObject();
+      page.getDiffEngine().getDiffAsJson(diff, SpecDifferenceEvaluator.CompareFhirVersion.R5);
+      gson = new GsonBuilder().setPrettyPrinting().create();
+      gsonp = new GsonBuilder().create();
+      json = gson.toJson(diff);
+      FileUtilities.stringToFile(json, Utilities.path(page.getFolders().dstDir, "fhir.r5.diff.json"));
 
       DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
       DocumentBuilder builder = dbf.newDocumentBuilder();
       Document doc = builder.newDocument();
       Element element = doc.createElement("difference");
       doc.appendChild(element);
-      page.getDiffEngine().getDiffAsXml(doc, element, true);
+      page.getDiffEngine().getDiffAsXml(doc, element, SpecDifferenceEvaluator.CompareFhirVersion.R4);
       prettyPrint(doc, Utilities.path(page.getFolders().dstDir, "fhir.r4.diff.xml"));
 
       dbf = DocumentBuilderFactory.newInstance();
@@ -3337,8 +3392,16 @@ public class Publisher implements URIResolver, SectionNumberer {
       doc = builder.newDocument();
       element = doc.createElement("difference");
       doc.appendChild(element);
-      page.getDiffEngine().getDiffAsXml(doc, element, false);
+      page.getDiffEngine().getDiffAsXml(doc, element, SpecDifferenceEvaluator.CompareFhirVersion.R4B);
       prettyPrint(doc, Utilities.path(page.getFolders().dstDir, "fhir.r4b.diff.xml"));
+      
+      dbf = DocumentBuilderFactory.newInstance();
+      builder = dbf.newDocumentBuilder();
+      doc = builder.newDocument();
+      element = doc.createElement("difference");
+      doc.appendChild(element);
+      page.getDiffEngine().getDiffAsXml(doc, element, SpecDifferenceEvaluator.CompareFhirVersion.R5);
+      prettyPrint(doc, Utilities.path(page.getFolders().dstDir, "fhir.r5.diff.xml"));
       
 
       checkBundleURLs(page.getResourceBundle());
@@ -3461,14 +3524,14 @@ public class Publisher implements URIResolver, SectionNumberer {
       produceSpecMap();
       processRDF();
 
-      page.log("....version maps", LogMessageType.Process);
-      ZipGenerator zip = new ZipGenerator(page.getFolders().dstDir + "r3r4maps.zip");
-      zip.addFiles(Utilities.path(page.getFolders().rootDir, "implementations", "r3maps", "R3toR4", ""), "r3/", null, null);
-      zip.addFiles(Utilities.path(page.getFolders().rootDir, "implementations", "r3maps", "R4toR3", ""), "r4/", null, null);
-      zip.close();
+      // page.log("....version maps", LogMessageType.Process);
+      // ZipGenerator zip = new ZipGenerator(page.getFolders().dstDir + "r3r4maps.zip");
+      // zip.addFiles(Utilities.path(page.getFolders().rootDir, "implementations", "r3maps", "R3toR4", ""), "r3/", null, null);
+      // zip.addFiles(Utilities.path(page.getFolders().rootDir, "implementations", "r3maps", "R4toR3", ""), "r4/", null, null);
+      // zip.close();
 
       page.log("....definitions", LogMessageType.Process);
-      zip = new ZipGenerator(page.getFolders().dstDir + "definitions.xml.zip");
+      ZipGenerator zip = new ZipGenerator(page.getFolders().dstDir + "definitions.xml.zip");
       zip.addFileName("version.info", page.getFolders().dstDir + "version.info", false);
       zip.addFileName("profiles-types.xml", page.getFolders().dstDir + "profiles-types.xml", false);
       zip.addFileName("profiles-resources.xml", page.getFolders().dstDir + "profiles-resources.xml", false);
@@ -3557,18 +3620,18 @@ public class Publisher implements URIResolver, SectionNumberer {
 
       page.log("....r4 in r5 format", LogMessageType.Process);
       zip = new ZipGenerator(page.getFolders().dstDir + "definitions-r4asr5.xml.zip");
-      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.XML, true);
+      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.XML, SpecDifferenceEvaluator.CompareFhirVersion.R4);
       zip.close();
       zip = new ZipGenerator(page.getFolders().dstDir + "definitions-r4asr5.json.zip");
-      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.JSON, true);
+      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.JSON, SpecDifferenceEvaluator.CompareFhirVersion.R4);
       zip.close();
             
       page.log("....r4b in r5 format", LogMessageType.Process);
       zip = new ZipGenerator(page.getFolders().dstDir + "definitions-r4basr5.xml.zip");
-      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.XML, false);
+      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.XML, SpecDifferenceEvaluator.CompareFhirVersion.R4B);
       zip.close();
       zip = new ZipGenerator(page.getFolders().dstDir + "definitions-r4basr5.json.zip");
-      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.JSON, false);
+      page.getDiffEngine().saveR4AsR5(zip, FhirFormat.JSON, SpecDifferenceEvaluator.CompareFhirVersion.R4B);
       zip.close();
             
       zip = new ZipGenerator(page.getFolders().dstDir + "all-valuesets.zip");
@@ -4924,22 +4987,27 @@ public class Publisher implements URIResolver, SectionNumberer {
     // resource
     StructureDefinition p = generateProfile(resource, n, xml, json, ttl, !logicalOnly);
     com.google.gson.JsonObject diff = new com.google.gson.JsonObject();
-    page.getDiffEngine().getDiffAsJson(diff, p, true);
+    page.getDiffEngine().getDiffAsJson(diff, p, SpecDifferenceEvaluator.CompareFhirVersion.R4);
     Gson gson = new GsonBuilder().setPrettyPrinting().create();
     json = gson.toJson(diff);
     FileUtilities.stringToFile(json, Utilities.path(page.getFolders().dstDir, resource.getName().toLowerCase() + ".r4.diff.json"));
     diff = new com.google.gson.JsonObject();
-    page.getDiffEngine().getDiffAsJson(diff, p, false);
+    page.getDiffEngine().getDiffAsJson(diff, p, SpecDifferenceEvaluator.CompareFhirVersion.R4B);
     gson = new GsonBuilder().setPrettyPrinting().create();
     json = gson.toJson(diff);
     FileUtilities.stringToFile(json, Utilities.path(page.getFolders().dstDir, resource.getName().toLowerCase() + ".r4b.diff.json"));
+    diff = new com.google.gson.JsonObject();
+    page.getDiffEngine().getDiffAsJson(diff, p, SpecDifferenceEvaluator.CompareFhirVersion.R5);
+    gson = new GsonBuilder().setPrettyPrinting().create();
+    json = gson.toJson(diff);
+    FileUtilities.stringToFile(json, Utilities.path(page.getFolders().dstDir, resource.getName().toLowerCase() + ".r5.diff.json"));
 
     DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
     DocumentBuilder builder = dbf.newDocumentBuilder();
     Document doc = builder.newDocument();
     Element element = doc.createElement("difference");
     doc.appendChild(element);
-    page.getDiffEngine().getDiffAsXml(doc, element, p, true);
+    page.getDiffEngine().getDiffAsXml(doc, element, p, SpecDifferenceEvaluator.CompareFhirVersion.R4);
     prettyPrint(doc, Utilities.path(page.getFolders().dstDir, resource.getName().toLowerCase() + ".r4.diff.xml"));
 
     dbf = DocumentBuilderFactory.newInstance();
@@ -4947,8 +5015,16 @@ public class Publisher implements URIResolver, SectionNumberer {
     doc = builder.newDocument();
     element = doc.createElement("difference");
     doc.appendChild(element);
-    page.getDiffEngine().getDiffAsXml(doc, element, p, false);
+    page.getDiffEngine().getDiffAsXml(doc, element, p, SpecDifferenceEvaluator.CompareFhirVersion.R4B);
     prettyPrint(doc, Utilities.path(page.getFolders().dstDir, resource.getName().toLowerCase() + ".r4b.diff.xml"));
+
+    dbf = DocumentBuilderFactory.newInstance();
+    builder = dbf.newDocumentBuilder();
+    doc = builder.newDocument();
+    element = doc.createElement("difference");
+    doc.appendChild(element);
+    page.getDiffEngine().getDiffAsXml(doc, element, p, SpecDifferenceEvaluator.CompareFhirVersion.R5);
+    prettyPrint(doc, Utilities.path(page.getFolders().dstDir, resource.getName().toLowerCase() + ".r5.diff.xml"));
   }
 
   public void prettyPrint(Document xml, String filename) throws Exception {
@@ -5924,12 +6000,9 @@ public class Publisher implements URIResolver, SectionNumberer {
     src = addSectionNumbers(file, logicalName, src, null, 0, doch, null);
 
     if (!page.getDefinitions().getStructuralPages().contains(file)) {
-      XhtmlNode fmm = findId(doch.doc, "fmm");
+      XhtmlNode ballot = findId(doch.doc, "ballot");
       XhtmlNode wg = findId(doch.doc, "wg");
-      if (fmm == null)
-        page.getValidationErrors().add(new   ValidationMessage(Source.Publisher, IssueType.BUSINESSRULE, -1, -1, file, "Page has no fmm level", IssueSeverity.ERROR));
-      else
-        page.getDefinitions().page(file).setFmm(get2ndPart(fmm.allText()));
+      page.getDefinitions().page(file).setStatus(ballot.allText().contains("Informative") ? StandardsStatus.INFORMATIVE : StandardsStatus.NORMATIVE);
       if (wg == null)
         page.getValidationErrors().add(new ValidationMessage(Source.Publisher, IssueType.BUSINESSRULE, -1, -1, file, "Page has no workgroup", IssueSeverity.ERROR));
       else
@@ -6306,8 +6379,7 @@ public class Publisher implements URIResolver, SectionNumberer {
       return new XhtmlComposer(XhtmlComposer.HTML).compose(doc);
     } catch (Exception e) {
       System.out.println(e.getMessage());
-      //FileUtilities.stringToFile(src, Utilities.path("tmp]", "dump.html"));
-      FileUtilities.stringToFile(src, Utilities.appendSlash(System.getProperty("user.dir")) + "fhir-error-dump.html");
+      FileUtilities.stringToFile(src, Utilities.path("[tmp]", "dump.html"));
 
       throw new Exception("Exception inserting section numbers in " + link + ": " + e.getMessage(), e);
     }

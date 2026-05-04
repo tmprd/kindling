@@ -6,6 +6,7 @@ import org.hl7.fhir.definitions.model.Definitions;
 import org.hl7.fhir.r5.conformance.profile.ProfileUtilities;
 import org.hl7.fhir.r5.model.CodeSystem.ConceptDefinitionComponent;
 import org.hl7.fhir.r5.model.StructureDefinition;
+import org.hl7.fhir.r5.model.UriType;
 import org.hl7.fhir.r5.model.ValueSet;
 import org.hl7.fhir.r5.model.ValueSet.ValueSetExpansionContainsComponent;
 import org.hl7.fhir.r5.terminologies.expansion.ValueSetExpansionOutcome;
@@ -54,7 +55,7 @@ public class MarkDownPreProcessor {
         } 
         if (Utilities.noString(url)) { 
           String[] paths = parts[0].split("\\.");
-          StructureDefinition p = new ProfileUtilities(workerContext, null, null).getProfile(null, paths[0]);
+          StructureDefinition p = new ProfileUtilities(workerContext, null, null).getProfile(null, new UriType(paths[0]));
           if (p != null) {
             String suffix = (paths.length > 1) ? "-definitions.html#"+parts[0] : ".html";
             if (p.getUserData("filename") == null)

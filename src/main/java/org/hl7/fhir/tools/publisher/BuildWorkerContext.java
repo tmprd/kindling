@@ -695,7 +695,7 @@ public class BuildWorkerContext extends BaseWorkerContext implements IWorkerCont
   }
 
   @Override
-  public BindingResolution resolveBinding(StructureDefinition def, String url, String path) throws FHIRException {
+  public BindingResolution resolveBinding(StructureDefinition def, String url, String path, org.hl7.fhir.r5.model.Element context) throws FHIRException {
     throw new Error("Not done yet");
   }
 
@@ -813,7 +813,7 @@ public class BuildWorkerContext extends BaseWorkerContext implements IWorkerCont
   }
 
   @Override
-  public <T extends Resource> T fetchResourceRaw(Class<T> class_, String uri) {
+  public <T extends Resource> T fetchResourceRaw(Class<T> class_, String uri, VersionResolutionRules rules) {
     return fetchResource(class_, uri);
   }
 

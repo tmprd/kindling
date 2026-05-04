@@ -932,7 +932,7 @@ public class OldSpreadsheetParser {
         sp.setUrl("http://hl7.org/fhir/SearchParameter/"+sp.getId());
         if (definitions != null)
           definitions.addNs(sp.getUrl(), "Search Parameter " +sp.getName(), pack.getId()+".html#search");
-        if (context.getSearchParameter(sp.getUrl()) != null)
+        if (context.fetchResource(SearchParameter.class, sp.getUrl()) != null)
           throw new Exception("Duplicated Search Parameter "+sp.getUrl());
         context.cacheResource(sp);
         pack.getSearchParameters().add(sp);
@@ -1162,7 +1162,8 @@ public class OldSpreadsheetParser {
       if (cd.getBinding() == BindingMethod.CodeList) {
         if (ref.startsWith("#valueset-"))
           throw new Exception("don't start code list references with #valueset-");
-        cd.setValueSet(ValueSetUtilities.makeShareable(new ValueSet()));
+        cd.setValueSet(new ValueSet());
+        ValueSetUtilities.makeShareable(cd.getValueSet(), false);
         valuesets.add(cd.getValueSet());
         cd.getValueSet().setVersion(version.toCode());
         cd.getValueSet().setId(igSuffix(ig)+ref.substring(1));
@@ -1228,7 +1229,7 @@ public class OldSpreadsheetParser {
       }
       if (cd.getValueSet() != null) {
         ValueSet vs = cd.getValueSet();
-        ValueSetUtilities.makeShareable(vs);
+        ValueSetUtilities.makeShareable(vs, false);
         vs.setUserData("filename", "valueset-"+vs.getId());
         if (!vs.hasExtension(ExtensionDefinitions.EXT_WORKGROUP)) {
           vs.addExtension().setUrl(ExtensionDefinitions.EXT_WORKGROUP).setValue(new CodeType(committee.getCode()));
@@ -1335,7 +1336,8 @@ public class OldSpreadsheetParser {
 	      CSFileInputStream input = null;
 	      try {
 	        input = new CSFileInputStream(filename);
-	        result = ValueSetUtilities.makeShareable((ValueSet) p.parse(input));
+	        result = (ValueSet) p.parse(input);
+          ValueSetUtilities.makeShareable(result, false);
 	      } finally {
 	        IOUtils.closeQuietly(input);
 	      }
@@ -1767,8 +1769,6 @@ public class OldSpreadsheetParser {
 			}
 		}
 
-    e.setStandardsStatus(StandardsStatus.fromCode(sheet.getColumn(row, "Standards-Status")));
-    e.setStandardsStatusReason(sheet.getColumn(row, "Standards-Status-Reason"));
     e.setNormativeVersion(sheet.getColumn(row, "Normative-Version"));
 
 		if (e.getName().startsWith("@")) {
