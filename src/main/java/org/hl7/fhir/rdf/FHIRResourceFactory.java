@@ -2,14 +2,25 @@ package org.hl7.fhir.rdf;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import org.apache.jena.graph.Graph;
+import org.apache.jena.graph.Node;
+import org.apache.jena.graph.Triple;
 import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.Resource;
-import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
+import org.apache.jena.riot.RDFWriter;
+import org.apache.jena.sparql.graph.GraphWrapper;
+import org.apache.jena.sparql.util.NodeCmp;
+import org.apache.jena.util.iterator.ExtendedIterator;
+import org.apache.jena.util.iterator.WrappedIterator;
 import org.apache.jena.vocabulary.OWL2;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
@@ -29,9 +40,10 @@ public class FHIRResourceFactory {
      * @param writer
      */
     public void serialize(OutputStream writer) {
-        RDFDataMgr.write(writer, model, RDFFormat.TURTLE_PRETTY);
+        RDFWriter.source(new SubjectSortedGraph(model.getGraph()))
+                .format(RDFFormat.TURTLE_PRETTY)
+                .output(writer);
     }
-
 
     /**
      * Add a new datatype to the model
@@ -413,4 +425,68 @@ public class FHIRResourceFactory {
         return fhir_bnode()
                 .addDataProperty(RDFNamespace.XSDpattern, pattern).resource;
     }
+
+    private static final class SubjectSortedGraph extends GraphWrapper {
+        private SubjectSortedGraph(Graph graph) {
+            super(graph);
+        }
+
+        @Override
+        public ExtendedIterator<Triple> find(Node subject, Node predicate, Node object) {
+            ExtendedIterator<Triple> triples = super.find(subject, predicate, object);
+            if (subject != Node.ANY || predicate != Node.ANY || object != Node.ANY) {
+                return triples;
+            }
+
+            List<Triple> collectedTriples;
+            try {
+                collectedTriples = triples.toList();
+            } finally {
+                triples.close();
+            }
+
+            Node ontologySubject = null;
+            Set<Node> allDisjointClassSubjects = new HashSet<>();
+            Map<Node, List<Triple>> triplesBySubject = new LinkedHashMap<>();
+            for (Triple triple : collectedTriples) {
+                Node tripleSubject = triple.getSubject();
+                triplesBySubject.computeIfAbsent(tripleSubject, ignored -> new ArrayList<>()).add(triple);
+
+                if (RDF.type.asNode().equals(triple.getPredicate()) && OWL2.Ontology.asNode().equals(triple.getObject())) {
+                    ontologySubject = tripleSubject;
+                }
+                if (RDF.type.asNode().equals(triple.getPredicate()) && OWL2.AllDisjointClasses.asNode().equals(triple.getObject())) {
+                    allDisjointClassSubjects.add(tripleSubject);
+                }
+            }
+
+            final Node orderedOntologySubject = ontologySubject;
+            List<Node> orderedSubjects = new ArrayList<>(triplesBySubject.keySet());
+            orderedSubjects.sort((left, right) -> {
+                // Move ontology declaration to top
+                boolean leftIsOntology = orderedOntologySubject != null && orderedOntologySubject.equals(left);
+                boolean rightIsOntology = orderedOntologySubject != null && orderedOntologySubject.equals(right);
+                if (leftIsOntology != rightIsOntology) {
+                    return leftIsOntology ? -1 : 1;
+                }
+
+                // Move disjoint axioms to bottom
+                boolean leftIsAllDisjoint = allDisjointClassSubjects.contains(left);
+                boolean rightIsAllDisjoint = allDisjointClassSubjects.contains(right);
+                if (leftIsAllDisjoint != rightIsAllDisjoint) {
+                    return leftIsAllDisjoint ? 1 : -1;
+                }
+
+                return NodeCmp.compareRDFTerms(left, right);
+            });
+
+            List<Triple> reorderedTriples = new ArrayList<>(collectedTriples.size());
+            for (Node orderedSubject : orderedSubjects) {
+                reorderedTriples.addAll(triplesBySubject.get(orderedSubject));
+            }
+
+            return WrappedIterator.create(reorderedTriples.iterator());
+        }
+    }
+    
 }
