@@ -225,34 +225,13 @@ public class FhirTurtleGenerator {
 
             FHIRResource originalResource = fact.fhir_class(className);
 
-            FHIRResource modResource = getModifierExtensionClass(className, originalResource, definitionCanonical);
+            FHIRResource modResource = getModifierExtensionClass(className, originalResource);
 
             if(baseDefinitionUrl != null) {
                 String baseName = getResourceNameFromCanonical(baseDefinitionUrl);
                 Resource baseRes = RDFNamespace.FHIR.resourceRef(baseName);
                 modResource.addObjectProperty(RDFS.subClassOf, baseRes);
             }
-            
-            // TODO move and combine this logic to where axioms are generated from ElementDefinitions
-            // This would only happen when "modifierExtension" is explicitly listed in the differential (like for the classes this code is intended for)
-
-            FHIRResource extensionResource = fact.fhir_class("Extension");
-
-            Resource modifierExtensionProperty = RDFNamespace.FHIR.resourceRef("modifierExtension");
-
-            FHIRResource cardRestriction = fact.fhir_bnode().addType(OWL2.Restriction)
-                                                .addDataProperty(OWL2.minCardinality, "1", XSDDatatype.XSDinteger)
-                                                .addObjectProperty(OWL2.onProperty, modifierExtensionProperty);
-            modResource.restriction(cardRestriction.resource);
-
-            FHIRResource extRestriction = fact.fhir_bnode().addType(OWL2.Restriction)
-                    .addObjectProperty(OWL2.onProperty, modifierExtensionProperty)
-                    .addObjectProperty(OWL2.allValuesFrom, extensionResource);
-            modResource.restriction(extRestriction.resource);
-
-            FHIRResource floatingBNode = fact.fhir_bnode().addType(OWL2.AllDisjointClasses);
-            List<Resource> disjointedList = new ArrayList<>(Arrays.asList(originalResource.resource, modResource.resource));
-            floatingBNode.addObjectProperty(OWL2.members, fact.fhir_list(disjointedList));
     }
 
   /* ==============================================
@@ -330,7 +309,7 @@ public class FhirTurtleGenerator {
         String definitionCanonical = typeSd != null ? typeSd.getUrl() : null;
         processTypes(typeName, typeRes, td, typeName, false, definitionCanonical);
         if(classHasModifierExtensions.contains(parentName)) {
-            var modRes = getModifierExtensionClass(typeName, typeRes, definitionCanonical);
+            var modRes = getModifierExtensionClass(typeName, typeRes);
             modRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_" + parentName)); // should be done separately...
         }
     }
@@ -380,7 +359,7 @@ public class FhirTurtleGenerator {
         if(resourceType.enablesModifierExtensions() || ancestorHasModifierExtensions(resourceName, superClass.getLocalName())) { 
             // Example: Bundle, Binary, Parameters should be excluded from this clause and not get modifier extensions here 
             // since they are under fhir:Resource instead of fhir:DomainResource
-            var modRes = getModifierExtensionClass(resourceName, rdRes, definitionCanonical);
+            var modRes = getModifierExtensionClass(resourceName, rdRes);
             modRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_" + superClass.getLocalName()));
         }
     }
@@ -414,8 +393,8 @@ public class FhirTurtleGenerator {
      * Generates corresponding ontology for Modifier Extensions of fhir:OriginalClass as fhir:_OriginalClass
      * * This is RDF-only syntax to help preserve monotonocity
      */
-    private FHIRResource getModifierExtensionClass(String baseName, FHIRResource baseFR, String definitionCanonical) throws Exception {
-            FHIRResource modRes = fact.fhir_class_with_provenance("_" + baseName, definitionCanonical);
+    private FHIRResource getModifierExtensionClass(String baseName, FHIRResource baseFR) throws Exception {
+            FHIRResource modRes = fact.fhir_class("_" + baseName);
             modRes.addDataProperty(RDFS.comment, "(Modified) " + baseName);
 
             // could change to instantiate only once
@@ -498,7 +477,7 @@ public class FhirTurtleGenerator {
 
             if (innerIsBackbone) {
                 // this is a subclass of BackboneElement, therefore generate modifier extension classes
-                var modRes = getModifierExtensionClass(targetClassName, targetElementClass, definitionCanonical);
+                var modRes = getModifierExtensionClass(targetClassName, targetElementClass);
                 modRes.addObjectProperty(RDFS.subClassOf, RDFNamespace.FHIR.resourceRef("_BackboneElement"));
             }
 
