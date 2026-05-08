@@ -413,17 +413,27 @@ public class FhirTurtleGenerator {
      * Generates corresponding ontology for Modifier Extensions of fhir:OriginalProperty as fhir:_OriginalProperty
      * This is RDF-only syntax to help preserve monotonocity
      */
-    private void genPropertyModifierExtensions(ElementDefn ed, String baseName, FHIRResource baseFR, String label, String definitionCanonical) throws Exception {
-        // Generate _ property only if ElementDefinition.isModifier = true
-        if ( !ed.isModifier() ) return;
-
+    private void genPropertyModifierExtensions(ElementDefn ed, String baseName, FHIRResource baseFR, String label) throws Exception {
         if(baseName.equals("modifierExtension")) return; //skip the special case of fhir:modifierExtension
 
+        // Generate _ property only if target type is DomainResource, BackboneElement, or BackboneType
+        var elementTypes = ed.getTypes();
+        var isComplexElement = elementTypes.isEmpty();
+        if (!isComplexElement) {
+            TypeRef targetType = elementTypes.get(0);
+            if (targetType.getName() != "DomainResource") {
+                return;
+            }
+        }
+        // TODO exclude when type is Element ...
+
+        
         // could change to instantiate only once
         FHIRResource hasExt = fact.fhir_resource("modifierExtensionProperty", OWL2.AnnotationProperty,"modifierExtensionProperty").addDataProperty(RDFS.comment, "has modifier extension property");
         Property extProp = ResourceFactory.createProperty(hasExt.resource.toString());  
 
-        FHIRResource modRes = fact.fhir_objectProperty("_" + baseName, definitionCanonical);
+        // Redundant "definitionCanonical" provenance annotation not needed here
+        FHIRResource modRes = fact.fhir_objectProperty("_" + baseName, null);
         modRes.addDataProperty(RDFS.comment, "(Modified) " + label);
         baseFR.addObjectProperty(extProp, modRes);
     }
@@ -459,7 +469,7 @@ public class FhirTurtleGenerator {
 
         FHIRResource predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
 
-        genPropertyModifierExtensions(ed, shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
+        genPropertyModifierExtensions(ed, shortenedPropertyName, predicateResource, targetClassName);
         
         // Polymorphic / Choice types
         if (ed.getName().endsWith("[x]")) {
@@ -514,7 +524,7 @@ public class FhirTurtleGenerator {
                 predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
             } else {
                 predicateResource = fact.fhir_objectProperty(shortenedPropertyName, definitionCanonical);
-                genPropertyModifierExtensions(ed, shortenedPropertyName, predicateResource, targetClassName, definitionCanonical);
+                genPropertyModifierExtensions(ed, shortenedPropertyName, predicateResource, targetClassName);
             }
         }
 
