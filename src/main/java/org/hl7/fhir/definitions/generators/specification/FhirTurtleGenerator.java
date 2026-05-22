@@ -454,6 +454,7 @@ public class FhirTurtleGenerator {
         // Monomorphic types
         FHIRResource targetElementClass;
         String targetTypeName = targetClassName;
+        boolean isContentReference = false;
 
         boolean isComplexElement = isComplexElement(ed);
         if (isComplexElement) {  //subnodes
@@ -467,7 +468,8 @@ public class FhirTurtleGenerator {
             // Monomorphic simple type -- example: Patient.active
             TypeRef targetType = ed.getTypes().get(0);
             String targetName = targetType.getName();
-            if (targetName.startsWith("@")) {        // Link to earlier definition
+            isContentReference = targetName.startsWith("@");
+            if (isContentReference) {        // Link to earlier definition
                 // "Content reference" to another defined type
                 ElementDefn targetRef = getElementForPath(targetName.substring(1));
                 // Target type name includes @
@@ -500,8 +502,12 @@ public class FhirTurtleGenerator {
         // BackboneElements only: Add provenance & definition annotations from source StructureDefinition (example: Patient.contact class annotated from ElementDefinition)
         // Don't do this for other kinds of Elements like DataTypes (used in too many places)
         if (isComplexElement) {
-            targetElementClass.addProvenance(definitionCanonical);
-            targetElementClass.addDefinition(ed.getDefinition()).addDefinition(ed.getShortDefn());
+            String elementPath = ed.getPath();
+            if (!isContentReference && elementPath != null) {
+                String elementDefinitionCanonical = definitionCanonical + "#" + elementPath;
+                targetElementClass.addProvenance(elementDefinitionCanonical);
+                targetElementClass.addDefinition(ed.getDefinition()).addDefinition(ed.getShortDefn());
+            }
         }
 
         // Annotate object with disambiguating title
